@@ -97,11 +97,6 @@ export const isValidSchemeRule = (rule) => {
       return false;
     }
 
-    // If has fromEnd, must be used with count
-    if (rule.fromEnd === true && !('count' in rule)) {
-      return false;
-    }
-
     // Cannot have both percentage and remainder
     if ('remainder' in rule) {
       return false;
@@ -136,6 +131,14 @@ export const validateSale = (sale) => {
     errors.push('Sale must have a valid buyer name');
   }
   
+  if (!isValidProductName(sale.product)) {
+    errors.push('Sale must have a valid product name');
+  }
+  
+  if (!isPositiveNumber(sale.amount)) {
+    errors.push('Sale amount must be a positive number');
+  }
+  
   if ('timestamp' in sale && !isNonNegativeNumber(sale.timestamp)) {
     errors.push('If timestamp is provided, it must be a non-negative number');
   }
@@ -159,16 +162,8 @@ export const validateLibraryParams = (params) => {
     return { isValid: false, errors };
   }
   
-  if (!isValidProductName(params.productName)) {
-    errors.push('Must provide a valid product name');
-  }
-  
-  if (!isPositiveNumber(params.unitPrice)) {
-    errors.push('Unit price must be a positive number');
-  }
-  
-  if (!isObject(params.scheme)) {
-    errors.push('Scheme must be an object');
+  if (!isObject(params.defaultScheme)) {
+    errors.push('Must provide a valid default scheme object');
   }
   
   return {
