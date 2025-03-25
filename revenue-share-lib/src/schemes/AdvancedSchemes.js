@@ -97,3 +97,33 @@ export const PLATFORM_GROWTH = {
   first500: { count: 500, percentage: 20 },
   allBuyers: { percentage: 10 }
 };
+
+/**
+ * Creates a custom advanced revenue sharing scheme
+ * @param {Object} options - Configuration options for the scheme
+ * @param {number} options.authorPercentage - Percentage allocated to the author
+ * @param {number} options.platformPercentage - Percentage allocated to the platform
+ * @param {number} options.earlyBuyersCount - Number of early buyers
+ * @param {number} options.earlyBuyersPercentage - Percentage allocated to early buyers
+ * @param {number} options.lateBuyersCount - Number of late buyers
+ * @param {number} options.lateBuyersPercentage - Percentage allocated to late buyers
+ * @param {number} options.allBuyersPercentage - Percentage allocated to all buyers
+ * @returns {Object} Custom advanced revenue sharing scheme
+ */
+export function createCustomAdvancedScheme({
+  authorPercentage,
+  platformPercentage,
+  earlyBuyersCount,
+  earlyBuyersPercentage,
+  lateBuyersCount,
+  lateBuyersPercentage,
+  allBuyersPercentage
+}) {
+  return {
+    author: { percentage: authorPercentage },
+    platform: { percentage: platformPercentage },
+    earlyBuyers: { count: earlyBuyersCount, percentage: earlyBuyersPercentage },
+    lateBuyers: { count: lateBuyersCount, percentage: lateBuyersPercentage },
+    allBuyers: { percentage: allBuyersPercentage }
+  };
+}
