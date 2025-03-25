@@ -1,6 +1,6 @@
 docs/нет подобных известных JavaScript-библиотек.md
 revenue-share-lib/node_modules/
 revenue-share-lib/dist/
-revenue-share-lib/rollup.config.js
 revenue-share-lib/package-lock.json
 revenue-share-lib/node_modules/.package-lock.json
+revenue-share-lib/coverage/
