@@ -1,14 +1,15 @@
 /**
  * @fileoverview Export all predefined revenue sharing schemes
  * @author RevShare Library
- * @version 1.0.0
+ * @version 2.0.0
  */
 
 import * as BasicSchemes from './BasicSchemes';
 import * as AdvancedSchemes from './AdvancedSchemes';
+import * as BuyToEarnSchemes from './BuyToEarnSchemes';
 
 // Export all schemes
-export { BasicSchemes, AdvancedSchemes };
+export { BasicSchemes, AdvancedSchemes, BuyToEarnSchemes };
 
 // Export a schemes catalog with metadata
 export const SchemesCatalog = {
@@ -87,6 +88,56 @@ export const SchemesCatalog = {
         description: 'Platform-focused scheme with 45% of revenue going to the platform'
       }
     }
+  },
+  buyToEarn: {
+    name: 'Buy-to-Earn Schemes',
+    description: 'Schemes for the Buy-to-Earn model with initial investment phase and dual-pool distribution',
+    schemes: {
+      STANDARD: {
+        title: 'Standard Buy-to-Earn',
+        description: 'Balanced distribution with equal shares between creator, platform and promotion'
+      },
+      CREATOR_FOCUSED: {
+        title: 'Creator Focused',
+        description: 'Prioritizes creator income with 20% share for the creator'
+      },
+      PLATFORM_FOCUSED: {
+        title: 'Platform Focused',
+        description: 'Prioritizes platform income with 20% share for the platform'
+      },
+      EARLY_PAYBACK: {
+        title: 'Early Payback Priority',
+        description: 'Optimized for faster early investor payback with 95% priority'
+      },
+      EQUAL_DISTRIBUTION: {
+        title: 'Equal Distribution',
+        description: 'More equal revenue distribution among all investors (25% priority)'
+      },
+      HIGH_PAYBACK: {
+        title: 'High Payback Goal',
+        description: 'Larger payback goal (3x) for investors with higher total returns'
+      },
+      PROMOTION_FOCUSED: {
+        title: 'Promotion Focused',
+        description: 'Higher allocation for marketing and promotional activities (25%)'
+      },
+      SMALL_INVESTMENT: {
+        title: 'Small Initial Investment',
+        description: 'Lower initial investment (100,000) for smaller projects'
+      },
+      LARGE_INVESTMENT: {
+        title: 'Large Initial Investment',
+        description: 'Higher initial investment (500,000) for larger projects'
+      },
+      QUICK_PAYBACK: {
+        title: 'Quick Payback',
+        description: 'Faster ROI for investors with 1.5x payback ratio'
+      },
+      BUYER_FOCUSED: {
+        title: 'Buyer Focused',
+        description: 'Maximizes buyer returns with lower platform/creator shares'
+      }
+    }
   }
 };
 
@@ -102,6 +153,11 @@ export function getSchemeByName(schemeName) {
     return AdvancedSchemes[schemeName];
   }
   
+  // Check Buy-to-Earn schemes
+  if (schemeName in BuyToEarnSchemes) {
+    return BuyToEarnSchemes[schemeName];
+  }
+  
   // Scheme not found
   return null;
 }
@@ -109,17 +165,57 @@ export function getSchemeByName(schemeName) {
 // Export function to get all schemes as an array
 export function getAllSchemes() {
   return [
-    ...Object.entries(BasicSchemes).map(([key, scheme]) => ({
-      id: key,
-      scheme,
-      category: 'basic',
-      ...SchemesCatalog.basic.schemes[key]
-    })),
+    ...Object.entries(BasicSchemes)
+      .filter(([key]) => !key.startsWith('BUY_TO_EARN_')) // Filter out duplicated schemes
+      .map(([key, scheme]) => ({
+        id: key,
+        scheme,
+        category: 'basic',
+        ...SchemesCatalog.basic.schemes[key]
+      })),
     ...Object.entries(AdvancedSchemes).map(([key, scheme]) => ({
       id: key,
       scheme,
       category: 'advanced',
       ...SchemesCatalog.advanced.schemes[key]
-    }))
+    })),
+    ...Object.entries(BuyToEarnSchemes)
+      .filter(([key]) => key !== 'createCustomScheme' && key !== 'getSchemeByName' && 
+              key !== 'getAllSchemeNames' && key !== 'getAllSchemesWithMetadata' && 
+              key !== 'SCHEME_MAP')
+      .map(([key, scheme]) => ({
+        id: key,
+        scheme,
+        category: 'buyToEarn',
+        ...SchemesCatalog.buyToEarn.schemes[key]
+      }))
   ];
+}
+
+/**
+ * Get Buy-to-Earn specific schemes only
+ * @returns {Array<Object>} - Array of Buy-to-Earn schemes with metadata
+ */
+export function getBuyToEarnSchemes() {
+  return Object.entries(BuyToEarnSchemes)
+    .filter(([key]) => key !== 'createCustomScheme' && key !== 'getSchemeByName' && 
+            key !== 'getAllSchemeNames' && key !== 'getAllSchemesWithMetadata' && 
+            key !== 'SCHEME_MAP')
+    .map(([key, scheme]) => ({
+      id: key,
+      scheme,
+      category: 'buyToEarn',
+      buyersShare: 100 - scheme.creatorShare - scheme.platformShare - scheme.promotionShare,
+      paybackPoolSharePercent: 100 - scheme.nonPaybackPoolSharePercent,
+      ...SchemesCatalog.buyToEarn.schemes[key]
+    }));
+}
+
+/**
+ * Creates a custom Buy-to-Earn scheme
+ * @param {Object} params - Scheme parameters as defined in BuyToEarnSchemes.createCustomScheme
+ * @returns {Object} - Custom Buy-to-Earn scheme
+ */
+export function createCustomBuyToEarnScheme(params) {
+  return BuyToEarnSchemes.createCustomScheme(params);
 }

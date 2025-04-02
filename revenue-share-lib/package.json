@@ -1,7 +1,7 @@
 {
   "name": "revenue-share-lib",
-  "version": "1.0.0",
-  "description": "A flexible JavaScript library for calculating revenue sharing payouts with various distribution schemes",
+  "version": "2.0.0",
+  "description": "A flexible JavaScript library for calculating revenue sharing payouts with various distribution schemes, including Buy-to-Earn model",
   "main": "dist/revenue-share.js",
   "module": "dist/revenue-share.esm.js",
   "types": "dist/index.d.ts",
@@ -24,7 +24,11 @@
     "payout-calculation",
     "finance",
     "payments",
-    "distribution"
+    "distribution",
+    "buy-to-earn",
+    "investment",
+    "payback",
+    "token-economy"
   ],
   "author": "aVa",
   "license": "MIT",

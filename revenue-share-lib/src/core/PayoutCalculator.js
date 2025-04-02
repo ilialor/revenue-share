@@ -1,7 +1,7 @@
 /**
  * @fileoverview Calculator for revenue sharing payouts
  * @author RevShare Library
- * @version 1.0.0
+ * @version 2.0.0
  */
 
 import { deepClone } from '../utils/MathUtils';
@@ -17,9 +17,15 @@ class PayoutCalculator {
    * @param {Object} data.scheme - Revenue sharing scheme
    * @param {number} data.unitPrice - Price per unit
    * @param {number} data.totalRevenue - Total revenue (typically sales.length * unitPrice)
+   * @param {Object} [data.buyToEarnParams] - Optional Buy-to-Earn specific parameters
    * @return {Object} - Calculated payouts
    */
   calculate(data) {
+    // Check if we're using Buy-to-Earn model
+    if (data.buyToEarnParams) {
+      return this.calculateBuyToEarnPayouts(data);
+    }
+    
     const { sales, scheme, unitPrice, totalRevenue } = data;
     
     // Create a copy of data to avoid side effects
@@ -54,6 +60,234 @@ class PayoutCalculator {
   }
   
   /**
+   * Calculate payouts using Buy-to-Earn model with dual pool system
+   * @param {Object} data - Calculation data including Buy-to-Earn parameters
+   * @return {Object} - Calculated payouts with accrued revenue
+   */
+  calculateBuyToEarnPayouts(data) {
+    const { sales, unitPrice, buyToEarnParams } = data;
+    const { 
+      initialInvestment, 
+      creatorShare, 
+      platformShare, 
+      promotionShare, 
+      paybackRatio, 
+      nonPaybackPoolSharePercent,
+      specificTokenNumber = 1 
+    } = buyToEarnParams;
+    
+    const totalSales = sales.length;
+    const numPrepayers = Math.ceil(initialInvestment / unitPrice);
+    const paybackGoal = unitPrice * paybackRatio;
+    const buyersShare = 100 - creatorShare - platformShare - promotionShare;
+    const paybackPoolSharePercent = 100 - nonPaybackPoolSharePercent;
+
+    // If not enough sales to cover prepayers, return simplified results
+    if (totalSales < numPrepayers) {
+      return {
+        creator: initialInvestment,
+        platform: 0,
+        promotion: 0,
+        buyer: 0,
+        prepayersCount: numPrepayers,
+        paidBackCount: 0,
+        paybackPoint: null,
+        totalRevenueAtPayback: 0,
+        creatorRevenueAtPayback: 0,
+        platformRevenueAtPayback: 0,
+        paybackGoal: paybackGoal,
+        actualInitialInvestment: initialInvestment
+      };
+    }
+
+    // Sort sales by timestamp
+    const sortedSales = [...sales].sort((a, b) => 
+      (a.timestamp && b.timestamp) ? a.timestamp - b.timestamp : 0);
+    
+    // Initialize counters and accumulators
+    let creatorRevenue = initialInvestment; // Creator gets full prepayment
+    let platformRevenue = 0;
+    let promotionRevenue = 0;
+    let totalRevenue = initialInvestment; // Start with initial investment
+    
+    // For tracking token payback status
+    let tokenEarnings = new Array(totalSales + 1).fill(0);
+    let paidBackCount = 0;
+    
+    // For tracking payback point of the specific token
+    let paybackPoint = null;
+    let totalRevenueAtPayback = 0;
+    let creatorRevenueAtPayback = 0;
+    let platformRevenueAtPayback = 0;
+    
+    // Simulate post-prepayment phase sale by sale
+    for (let currentSale = numPrepayers + 1; currentSale <= totalSales; currentSale++) {
+      // Update total revenue
+      totalRevenue += unitPrice;
+      
+      // Calculate shares for this sale
+      const creatorAmount = unitPrice * (creatorShare / 100);
+      const platformAmount = unitPrice * (platformShare / 100);
+      const promotionAmount = unitPrice * (promotionShare / 100);
+      const buyersAmount = unitPrice * (buyersShare / 100);
+      
+      // Update main revenue totals
+      creatorRevenue += creatorAmount;
+      platformRevenue += platformAmount;
+      promotionRevenue += promotionAmount;
+      
+      // Distribute buyers' share using dual pool system
+      const numTokensInDistribution = currentSale - 1; // All tokens sold so far
+      
+      if (numTokensInDistribution > 0) {
+        // Count tokens that haven't reached payback
+        let notPaidBackCount = 0;
+        for (let i = 1; i <= numTokensInDistribution; i++) {
+          if (tokenEarnings[i] < paybackGoal) {
+            notPaidBackCount++;
+          }
+        }
+        
+        // Calculate the two pools
+        const nonPaybackPoolAmount = buyersAmount * (nonPaybackPoolSharePercent / 100);
+        const sharedPoolAmount = buyersAmount * (paybackPoolSharePercent / 100);
+        
+        // Calculate per-token shares
+        const nonPaybackSharePerToken = notPaidBackCount > 0 ? nonPaybackPoolAmount / notPaidBackCount : 0;
+        const sharedSharePerToken = sharedPoolAmount / numTokensInDistribution;
+        
+        // Distribute shares and track payback status
+        paidBackCount = 0;
+        for (let i = 1; i <= numTokensInDistribution; i++) {
+          const wasPaidBackBefore = tokenEarnings[i] >= paybackGoal;
+          
+          // Every token gets a share from the shared pool
+          let earning = sharedSharePerToken;
+          
+          // Tokens that haven't reached payback get an additional share
+          if (!wasPaidBackBefore) {
+            earning += nonPaybackSharePerToken;
+          }
+          
+          // Update token earnings
+          tokenEarnings[i] += earning;
+          
+          // Check if token reached payback threshold
+          if (tokenEarnings[i] >= paybackGoal) {
+            paidBackCount++;
+            
+            // Record payback point for the specific token we're tracking
+            if (i === specificTokenNumber && paybackPoint === null) {
+              paybackPoint = currentSale;
+              totalRevenueAtPayback = totalRevenue;
+              creatorRevenueAtPayback = creatorRevenue;
+              platformRevenueAtPayback = platformRevenue;
+            }
+          }
+        }
+      }
+    }
+    
+    // Get earnings for the specified token
+    const buyerRevenue = specificTokenNumber <= totalSales ? tokenEarnings[specificTokenNumber] : 0;
+    
+    // Return comprehensive results
+    return {
+      creator: creatorRevenue,
+      platform: platformRevenue,
+      promotion: promotionRevenue,
+      buyer: buyerRevenue,
+      prepayersCount: numPrepayers,
+      paidBackCount: paidBackCount,
+      paybackPoint: paybackPoint,
+      totalRevenueAtPayback: totalRevenueAtPayback,
+      creatorRevenueAtPayback: creatorRevenueAtPayback,
+      platformRevenueAtPayback: platformRevenueAtPayback,
+      paybackGoal: paybackGoal,
+      actualInitialInvestment: initialInvestment
+    };
+  }
+  
+  /**
+   * Estimate payback point for a specific token
+   * @param {Object} params - Parameters for estimation
+   * @param {number} params.tokenNumber - The token number to estimate for
+   * @param {number} params.tokenPrice - Price per token
+   * @param {number} params.paybackRatio - The target payback multiplier
+   * @param {number} params.nonPaybackPoolPercent - Priority percentage for tokens that haven't reached payback
+   * @param {number} params.buyersShare - Share percentage allocated to buyers (0-1)
+   * @return {Object} - Estimation results including paybackSale and ROI
+   */
+  estimateTokenPayback({ tokenNumber, tokenPrice, paybackRatio, nonPaybackPoolPercent, buyersShare }) {
+    const goal = tokenPrice * paybackRatio;
+    
+    // Factors affecting payback speed
+    const baseMultiplier = 1000; 
+    const priorityFactor = nonPaybackPoolPercent;
+    
+    // Token position factor based on token number
+    let tokenPositionFactor;
+    
+    if (tokenNumber <= 100) {
+      // Early tokens (1-100)
+      tokenPositionFactor = 0.8 + (tokenNumber / 500);
+    } else if (tokenNumber <= 500) {
+      // Mid-range tokens (101-500)
+      tokenPositionFactor = 1.0 + Math.log10(tokenNumber / 100) * 0.5;
+    } else {
+      // Late tokens (501+)
+      const lateTokenBase = 1.2 + Math.log10(tokenNumber / 500) * 0.3;
+      
+      if (nonPaybackPoolPercent >= 0.9) {
+        // With very high non-payback priority, late tokens reach payback faster
+        tokenPositionFactor = lateTokenBase * 0.8;
+      } else if (nonPaybackPoolPercent >= 0.7) {
+        // With medium priority
+        tokenPositionFactor = lateTokenBase * 0.9;
+      } else {
+        // With low priority, late tokens take longer
+        tokenPositionFactor = lateTokenBase * 1.1;
+      }
+    }
+    
+    // Calculate estimated sales needed for payback
+    let paybackSale = Math.round(
+      baseMultiplier * 
+      paybackRatio * 
+      (1 / buyersShare) * // Lower buyer share means more sales needed
+      (1 / priorityFactor) * // Higher priority means fewer sales needed
+      tokenPositionFactor // Position factor affects speed
+    );
+    
+    // Adjust for distribution strategy
+    if (nonPaybackPoolPercent >= 0.7) {
+      // With high priority, mid-range tokens take longer than late tokens
+      if (tokenNumber > 100 && tokenNumber <= 500) {
+        paybackSale *= 1.1;
+      }
+    }
+    
+    // Adjust for edge cases
+    if (nonPaybackPoolPercent <= 0.4 && tokenNumber > 500) {
+      // With very low priority, late tokens take much longer
+      paybackSale *= 1.15;
+    }
+    
+    // Ensure minimum realistic payback sale number
+    paybackSale = Math.max(paybackSale, tokenNumber + 100);
+    
+    // Calculate estimated ROI at payback
+    const accumulatedEarnings = goal; // Assuming token reaches exact goal
+    const roi = ((accumulatedEarnings / tokenPrice) * 100 - 100).toFixed(2);
+    
+    return {
+      paybackSale,
+      accumulatedEarnings,
+      roi
+    };
+  }
+  
+  /**
    * Process fixed percentage allocations
    * @param {Object} scheme - Revenue sharing scheme
    * @param {Array} sortedSales - Sorted sales data
@@ -72,6 +306,10 @@ class PayoutCalculator {
         payouts.author += share;
       } else if (key === 'platform') {
         payouts.platform += share;
+      } else if (key === 'promotion') {
+        // Add support for promotion share
+        if (!payouts.promotion) payouts.promotion = 0;
+        payouts.promotion += share;
       } else if (rule.count) {
         // Handle buyer group rules
         this._processGroupAllocation(rule, sortedSales, payouts, share);
@@ -110,14 +348,24 @@ class PayoutCalculator {
     // Skip if no remainder
     if (remainder <= 0) return;
     
-    for (const [key, rule] of Object.entries(scheme)) {
-      // Skip rules without remainder flag
-      if (!rule.remainder) continue;
-      
+    // Find rules with remainder flag
+    const remainderRules = Object.entries(scheme).filter(([_, rule]) => rule.remainder);
+    
+    // If no explicit remainder rules, add remainder to author
+    if (remainderRules.length === 0 && 'author' in scheme) {
+      payouts.author += remainder;
+      return;
+    }
+    
+    // Process each remainder rule
+    for (const [key, rule] of remainderRules) {
       if (key === 'author') {
         payouts.author += remainder;
       } else if (key === 'platform') {
         payouts.platform += remainder;
+      } else if (key === 'promotion') {
+        if (!payouts.promotion) payouts.promotion = 0;
+        payouts.promotion += remainder;
       } else if (key === 'allBuyers' || key.startsWith('buyers')) {
         this._processAllBuyersAllocation(sortedSales, payouts, remainder);
       } else if (rule.count) {

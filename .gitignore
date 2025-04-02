@@ -1,7 +1,4 @@
-docs/нет подобных известных JavaScript-библиотек.md
+package-lock.json
 revenue-share-lib/node_modules/
-revenue-share-lib/dist/
-revenue-share-lib/package-lock.json
-revenue-share-lib/node_modules/.package-lock.json
 revenue-share-lib/coverage/
-docs/Описание разработки библиотеки расчета выплат на JavaScript.md
+node_modules/

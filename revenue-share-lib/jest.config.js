@@ -52,11 +52,23 @@ module.exports = {
     }
   },
   
-  // Configure Babel for Jest
+  // Transform files with babel-jest
   transform: {
-    '^.+\\.js$': ['babel-jest', { presets: ['@babel/preset-env'] }]
+    '^.+\\.js$': 'babel-jest'
   },
   
-  // Don't ignore node_modules that need to be transformed
-  transformIgnorePatterns: ['node_modules/(?!(@babel)/)']
+  // Setup для ES модулей
+  transformIgnorePatterns: [
+    '/node_modules/(?!.*\\.mjs$)'
+  ],
+  
+  // Используем тип модулей ESM
+  extensionsToTreatAsEsm: ['.js'],
+  
+  // Добавляем эти настройки для поддержки ESM в Jest
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    },
+  }
 };
