@@ -357,20 +357,23 @@ class PayoutCalculator {
       return;
     }
     
-    // Process each remainder rule
+    // Разделить остаток между всеми правилами с remainder: true
+    const sharePerRule = remainder / remainderRules.length;
+    
+    // Process each remainder rule with its share of the remainder
     for (const [key, rule] of remainderRules) {
       if (key === 'author') {
-        payouts.author += remainder;
+        payouts.author += sharePerRule;
       } else if (key === 'platform') {
-        payouts.platform += remainder;
+        payouts.platform += sharePerRule;
       } else if (key === 'promotion') {
         if (!payouts.promotion) payouts.promotion = 0;
-        payouts.promotion += remainder;
+        payouts.promotion += sharePerRule;
       } else if (key === 'allBuyers' || key.startsWith('buyers')) {
-        this._processAllBuyersAllocation(sortedSales, payouts, remainder);
+        this._processAllBuyersAllocation(sortedSales, payouts, sharePerRule);
       } else if (rule.count) {
         // Handle buyer group rules
-        this._processGroupAllocation(rule, sortedSales, payouts, remainder);
+        this._processGroupAllocation(rule, sortedSales, payouts, sharePerRule);
       }
     }
   }

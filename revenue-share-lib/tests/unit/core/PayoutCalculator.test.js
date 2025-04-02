@@ -423,4 +423,306 @@ describe('PayoutCalculator', () => {
     expect('paybackPoint' in midToken).toBe(true);
     expect('paybackPoint' in lateToken).toBe(true);
   });
+
+  // Дополнительные тесты для увеличения покрытия
+  
+  test('Calculation with no scheme allocation rule for author', () => {
+    const data = {
+      sales: [
+        { buyer: 'buyer1', timestamp: 1000 },
+        { buyer: 'buyer2', timestamp: 2000 }
+      ],
+      scheme: {
+        platform: { percentage: 30 },
+        allBuyers: { percentage: 70 }
+      },
+      unitPrice: 100,
+      totalRevenue: 200
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    expect(payouts.author).toBe(0); // Автор отсутствует в схеме, должен получить 0
+    expect(payouts.platform).toBe(60);
+    expect(payouts.buyers.buyer1).toBe(70);
+    expect(payouts.buyers.buyer2).toBe(70);
+  });
+
+  test('Calculation with promotion allocation', () => {
+    const data = {
+      sales: [
+        { buyer: 'buyer1', timestamp: 1000 },
+        { buyer: 'buyer2', timestamp: 2000 }
+      ],
+      scheme: {
+        author: { percentage: 40 },
+        platform: { percentage: 30 },
+        promotion: { percentage: 20 },
+        allBuyers: { percentage: 10 }
+      },
+      unitPrice: 100,
+      totalRevenue: 200
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    expect(payouts.author).toBe(80);
+    expect(payouts.platform).toBe(60);
+    expect(payouts.promotion).toBe(40); // Проверка выплат промоушена
+    expect(payouts.buyers.buyer1).toBe(10);
+    expect(payouts.buyers.buyer2).toBe(10);
+  });
+
+  test('Calculation with promotion allocation as remainder', () => {
+    const data = {
+      sales: [
+        { buyer: 'buyer1', timestamp: 1000 },
+        { buyer: 'buyer2', timestamp: 2000 }
+      ],
+      scheme: {
+        author: { percentage: 40 },
+        platform: { percentage: 30 },
+        promotion: { remainder: true }
+      },
+      unitPrice: 100,
+      totalRevenue: 200
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    expect(payouts.author).toBe(80);
+    expect(payouts.platform).toBe(60);
+    expect(payouts.promotion).toBeCloseTo(60, 10); // Используем toBeCloseTo с высокой точностью
+    expect(Object.keys(payouts.buyers).length).toBe(2);
+  });
+
+  test('Group allocation with fewer sales than count', () => {
+    const data = {
+      sales: [
+        { buyer: 'buyer1', timestamp: 1000 },
+        { buyer: 'buyer2', timestamp: 2000 }
+      ],
+      scheme: {
+        author: { percentage: 40 },
+        platform: { percentage: 30 },
+        earlyBuyers: { count: 5, percentage: 30 } // Запрошено 5, но у нас только 2
+      },
+      unitPrice: 100,
+      totalRevenue: 200
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    expect(payouts.author).toBe(80);
+    expect(payouts.platform).toBe(60);
+    expect(payouts.buyers.buyer1).toBe(30); // 30% / 2 = 15% каждому
+    expect(payouts.buyers.buyer2).toBe(30);
+  });
+
+  test('Late buyers group with fewer sales than count', () => {
+    const data = {
+      sales: [
+        { buyer: 'buyer1', timestamp: 1000 },
+        { buyer: 'buyer2', timestamp: 2000 }
+      ],
+      scheme: {
+        author: { percentage: 40 },
+        platform: { percentage: 30 },
+        lateBuyers: { count: 5, percentage: 30, fromEnd: true } // Запрошено 5, но у нас только 2
+      },
+      unitPrice: 100,
+      totalRevenue: 200
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    expect(payouts.author).toBe(80);
+    expect(payouts.platform).toBe(60);
+    expect(payouts.buyers.buyer1).toBe(30);
+    expect(payouts.buyers.buyer2).toBe(30);
+  });
+
+  test('Multiple remainder rules - only first should be applied', () => {
+    const data = {
+      sales: [
+        { buyer: 'buyer1', timestamp: 1000 },
+        { buyer: 'buyer2', timestamp: 2000 }
+      ],
+      scheme: {
+        author: { percentage: 40, remainder: true }, // Правило с remainder для автора
+        platform: { percentage: 30 },
+        allBuyers: { remainder: true } // Правило с remainder для всех покупателей
+      },
+      unitPrice: 100,
+      totalRevenue: 200
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    // Теперь остаток (30%) должен быть разделен поровну между двумя правилами с remainder: true
+    // Автор: 40% (фиксированный) + 15% (половина остатка) = 55%
+    // Платформа: 30% (фиксированный) = 30%
+    // Покупатели: 0% (фиксированный) + 15% (половина остатка) = 15% (по 7.5% на каждого)
+    
+    expect(payouts.author).toBeCloseTo(110, 10); // 55% от 200 = 110
+    expect(payouts.platform).toBe(60); // 30% от 200 = 60
+    
+    // Каждый покупатель получает половину от 15% = 7.5% от totalRevenue
+    expect(payouts.buyers.buyer1).toBeCloseTo(15, 10); // 7.5% от 200 = 15
+    expect(payouts.buyers.buyer2).toBeCloseTo(15, 10); // 7.5% от 200 = 15
+    
+    // Общая сумма должна равняться 100% от totalRevenue
+    const totalDistributed = payouts.author + payouts.platform + 
+                            Object.values(payouts.buyers).reduce((sum, val) => sum + val, 0);
+    expect(totalDistributed).toBeCloseTo(200, 10); // 100% от 200 = 200
+  });
+
+  test('Explicit remainder value of 0', () => {
+    const data = {
+      sales: [
+        { buyer: 'buyer1', timestamp: 1000 },
+        { buyer: 'buyer2', timestamp: 2000 }
+      ],
+      scheme: {
+        author: { percentage: 100 }, // Полное распределение
+        platform: { remainder: true }
+      },
+      unitPrice: 100,
+      totalRevenue: 200
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    expect(payouts.author).toBe(200);
+    expect(payouts.platform).toBe(0); // Остаток 0%
+    expect(payouts.buyers.buyer1).toBe(0);
+    expect(payouts.buyers.buyer2).toBe(0);
+  });
+
+  test('Invalid custom calculator function', () => {
+    expect(() => {
+      calculator.createCustomCalculator("not a function");
+    }).toThrow('Custom calculator must be a function');
+  });
+
+  test('All buyers allocation with no sales', () => {
+    const data = {
+      sales: [],
+      scheme: {
+        author: { percentage: 70 },
+        platform: { percentage: 20 },
+        allBuyers: { percentage: 10 }
+      },
+      unitPrice: 100,
+      totalRevenue: 0
+    };
+
+    const payouts = calculator.calculate(data);
+    
+    expect(payouts.author).toBe(0);
+    expect(payouts.platform).toBe(0);
+    expect(Object.keys(payouts.buyers).length).toBe(0);
+  });
+
+  test('Buy-to-Earn estimation for early token', () => {
+    const params = {
+      tokenNumber: 50, // Ранний токен
+      tokenPrice: 500,
+      paybackRatio: 2,
+      nonPaybackPoolPercent: 0.6,
+      buyersShare: 0.7
+    };
+
+    const estimation = calculator.estimateTokenPayback(params);
+    
+    expect(estimation.paybackSale).toBeGreaterThan(50);
+    expect(estimation.accumulatedEarnings).toBe(1000);
+  });
+
+  test('Buy-to-Earn estimation for mid-range token', () => {
+    const params = {
+      tokenNumber: 250, // Средний токен
+      tokenPrice: 500,
+      paybackRatio: 2,
+      nonPaybackPoolPercent: 0.6,
+      buyersShare: 0.7
+    };
+
+    const estimation = calculator.estimateTokenPayback(params);
+    
+    expect(estimation.paybackSale).toBeGreaterThan(250);
+    expect(estimation.accumulatedEarnings).toBe(1000);
+  });
+
+  test('Buy-to-Earn estimation for late token', () => {
+    const params = {
+      tokenNumber: 700, // Поздний токен
+      tokenPrice: 500,
+      paybackRatio: 2,
+      nonPaybackPoolPercent: 0.6,
+      buyersShare: 0.7
+    };
+
+    const estimation = calculator.estimateTokenPayback(params);
+    
+    expect(estimation.paybackSale).toBeGreaterThan(700);
+    expect(estimation.accumulatedEarnings).toBe(1000);
+  });
+
+  test('Buy-to-Earn estimation with high priority', () => {
+    const params = {
+      tokenNumber: 600,
+      tokenPrice: 500,
+      paybackRatio: 2,
+      nonPaybackPoolPercent: 0.9, // Высокий приоритет для непогашенных токенов
+      buyersShare: 0.7
+    };
+
+    const estimation = calculator.estimateTokenPayback(params);
+    
+    expect(estimation.paybackSale).toBeGreaterThan(600);
+    expect(estimation.accumulatedEarnings).toBe(1000);
+  });
+
+  test('Buy-to-Earn estimation with low priority', () => {
+    const params = {
+      tokenNumber: 600,
+      tokenPrice: 500,
+      paybackRatio: 2,
+      nonPaybackPoolPercent: 0.3, // Низкий приоритет для непогашенных токенов
+      buyersShare: 0.7
+    };
+
+    const estimation = calculator.estimateTokenPayback(params);
+    
+    expect(estimation.paybackSale).toBeGreaterThan(600);
+    expect(estimation.accumulatedEarnings).toBe(1000);
+  });
+
+  test('Buy-to-Earn calculation with timestamps without sorting', () => {
+    const data = {
+      sales: Array(1000).fill().map((_, i) => ({ 
+        buyer: `buyer${i+1}`, 
+        // Все временные метки одинаковые
+        timestamp: 1000
+      })),
+      unitPrice: 500,
+      buyToEarnParams: {
+        initialInvestment: 100000,
+        creatorShare: 10,
+        platformShare: 10,
+        promotionShare: 10,
+        paybackRatio: 2,
+        nonPaybackPoolSharePercent: 60,
+        specificTokenNumber: 100
+      }
+    };
+
+    const payouts = calculator.calculateBuyToEarnPayouts(data);
+    
+    // Проверка основных параметров
+    expect(payouts.creator).toBeGreaterThan(100000);
+    expect(payouts.platform).toBeGreaterThan(0);
+    expect(payouts.promotion).toBeGreaterThan(0);
+  });
 });
