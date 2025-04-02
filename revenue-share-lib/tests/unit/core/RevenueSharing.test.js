@@ -1,7 +1,7 @@
 /**
  * @fileoverview Tests for the RevenueSharing core class
  * @author RevShare Library
- * @version 1.0.0
+ * @version 2.0.0
  */
 
 // Import the RevenueSharing class
@@ -241,5 +241,212 @@ describe('RevenueSharing Core', () => {
     // Без округления
     const exactPayouts = lib.calculatePayouts({ roundResults: false });
     expect(exactPayouts.author).toBe(33.333);
+  });
+
+  // ----- Тесты для Buy-to-Earn модели -----
+
+  // Тест 11: Инициализация Buy-to-Earn модели
+  test('Initializing Buy-to-Earn model', () => {
+    const lib = new RevenueSharing({
+      productName: 'BuyToEarnProduct',
+      unitPrice: 500,
+      useBuyToEarnModel: true,
+      initialInvestment: 300000,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Проверка правильной инициализации
+    expect(lib.productName).toBe('BuyToEarnProduct');
+    expect(lib.unitPrice).toBe(500);
+    expect(lib.useBuyToEarnModel).toBe(true);
+    expect(lib.initialInvestment).toBe(300000);
+    expect(lib.creatorShare).toBe(10);
+    expect(lib.platformShare).toBe(10);
+    expect(lib.promotionShare).toBe(10);
+    expect(lib.paybackRatio).toBe(2);
+    expect(lib.nonPaybackPoolSharePercent).toBe(60);
+  });
+
+  // Тест 12: Расчет числа предоплатных токенов
+  test('Calculating number of prepayers', () => {
+    const lib = new RevenueSharing({
+      productName: 'BuyToEarnProduct',
+      unitPrice: 500,
+      useBuyToEarnModel: true,
+      initialInvestment: 300000,
+      creatorShare: 10
+    });
+    
+    const numPrepayers = lib.calculateNumPrepayers();
+    
+    // 300000 / 500 = 600
+    expect(numPrepayers).toBe(600);
+  });
+
+  // Тест 13: Расчет выплат для Buy-to-Earn модели
+  test('Calculating payouts for Buy-to-Earn model', () => {
+    const lib = new RevenueSharing({
+      productName: 'BuyToEarnProduct',
+      unitPrice: 500,
+      useBuyToEarnModel: true,
+      initialInvestment: 300000,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Добавляем продажи (включая предоплатные)
+    for (let i = 1; i <= 1000; i++) {
+      lib.addSale({ buyer: `buyer${i}`, timestamp: 1000 + i });
+    }
+    
+    // Расчет для конкретного токена
+    const payouts = lib.calculatePayouts({
+      specificTokenNumber: 100
+    });
+    
+    // Основные проверки
+    expect(payouts.creator).toBeGreaterThan(300000); // Создатель должен получить минимум initialInvestment
+    expect(payouts.platform).toBeGreaterThan(0);
+    expect(payouts.promotion).toBeGreaterThan(0);
+    expect(payouts.buyer).toBeGreaterThan(0);
+    expect(payouts.prepayersCount).toBe(600);
+    expect(payouts.paybackGoal).toBe(1000); // 500 * 2 = 1000
+    
+    // Расчет общих выплат (без указания токена)
+    const generalPayouts = lib.calculatePayouts();
+    
+    // Те же проверки для общих выплат
+    expect(generalPayouts.creator).toBeGreaterThan(300000);
+    expect(generalPayouts.platform).toBeGreaterThan(0);
+    expect(generalPayouts.promotion).toBeGreaterThan(0);
+  });
+
+  // Тест 14: Оценка точки окупаемости токена
+  test('Estimating token payback point', () => {
+    const lib = new RevenueSharing({
+      productName: 'BuyToEarnProduct',
+      unitPrice: 500,
+      useBuyToEarnModel: true,
+      initialInvestment: 300000,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Оценка для токена #100
+    const estimate = lib.estimateTokenPayback(100);
+    
+    // Проверки
+    expect(estimate.paybackSale).toBeGreaterThan(100);
+    expect(estimate.accumulatedEarnings).toBeGreaterThan(0);
+    expect(estimate.roi).toBeDefined();
+    
+    // Оценка должна отличаться для разных токенов
+    const estimateEarly = lib.estimateTokenPayback(10);
+    const estimateLate = lib.estimateTokenPayback(500);
+    
+    expect(estimateEarly.paybackSale).toBeLessThan(estimateLate.paybackSale);
+  });
+
+  // Тест 15: Экспорт/импорт данных для Buy-to-Earn модели
+  test('Export and import Buy-to-Earn data', () => {
+    const lib1 = new RevenueSharing({
+      productName: 'BuyToEarnProduct',
+      unitPrice: 500,
+      useBuyToEarnModel: true,
+      initialInvestment: 300000,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Добавляем продажи
+    for (let i = 1; i <= 700; i++) {
+      lib1.addSale({ buyer: `buyer${i}`, timestamp: 1000 + i });
+    }
+    
+    const exportedData = lib1.exportData();
+    
+    // Создаем новый инстанс с другими параметрами
+    const lib2 = new RevenueSharing({
+      productName: 'DummyProduct',
+      unitPrice: 100,
+      scheme: { author: { percentage: 100 } }
+    });
+    
+    // Импортируем данные
+    lib2.importData(exportedData);
+    
+    // Проверка правильности импорта
+    expect(lib2.productName).toBe('BuyToEarnProduct');
+    expect(lib2.unitPrice).toBe(500);
+    expect(lib2.useBuyToEarnModel).toBe(true);
+    expect(lib2.initialInvestment).toBe(300000);
+    expect(lib2.sales.length).toBe(700);
+    
+    // Расчет должен работать
+    const payouts = lib2.calculatePayouts({ specificTokenNumber: 100 });
+    expect(payouts.creator).toBeGreaterThan(300000);
+  });
+
+  // Тест 16: Buy-to-Earn с разными параметрами
+  test('Buy-to-Earn with different parameters', () => {
+    // Создаем модели с разными параметрами
+    const highCreatorShare = new RevenueSharing({
+      productName: 'HighCreatorShare',
+      unitPrice: 500,
+      useBuyToEarnModel: true,
+      initialInvestment: 300000,
+      creatorShare: 25, // Высокая доля создателя
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    const highPaybackRatio = new RevenueSharing({
+      productName: 'HighPaybackRatio',
+      unitPrice: 500,
+      useBuyToEarnModel: true,
+      initialInvestment: 300000,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 3, // Высокий множитель окупаемости
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Добавляем одинаковые продажи
+    for (let i = 1; i <= 1000; i++) {
+      highCreatorShare.addSale({ buyer: `buyer${i}`, timestamp: 1000 + i });
+      highPaybackRatio.addSale({ buyer: `buyer${i}`, timestamp: 1000 + i });
+    }
+    
+    // Расчет для токена #100
+    const payoutsCreator = highCreatorShare.calculatePayouts({ specificTokenNumber: 100 });
+    const payoutsRatio = highPaybackRatio.calculatePayouts({ specificTokenNumber: 100 });
+    
+    // С высокой долей создателя токены должны окупаться медленнее
+    if (payoutsCreator.paybackPoint && payoutsRatio.paybackPoint) {
+      expect(payoutsCreator.paybackPoint).toBeGreaterThan(payoutsRatio.paybackPoint);
+    }
+    
+    // Цель окупаемости должна быть разной
+    expect(payoutsRatio.paybackGoal).toBe(1500); // 500 * 3
+    expect(payoutsCreator.paybackGoal).toBe(1000); // 500 * 2
+    
+    // Создатель должен получать больше в модели с высокой долей
+    expect(payoutsCreator.creator).toBeGreaterThan(payoutsRatio.creator);
   });
 });

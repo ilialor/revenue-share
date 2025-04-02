@@ -1,2 +1,4 @@
 package-lock.json
 revenue-share-lib/node_modules/
+revenue-share-lib/coverage/
+node_modules/
