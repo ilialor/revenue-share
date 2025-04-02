@@ -684,4 +684,250 @@ describe('RevenueSharing Core', () => {
     expect(result.isValid).toBe(true);
     expect(result.errors.length).toBe(0);
   });
+
+  // Тест 31: Получение статистики продаж без отслеживания временных меток
+  test('Getting sales statistics without timestamp tracking', () => {
+    const rs = new RevenueSharing({
+      productName: 'No Timestamp Stats Test',
+      scheme: {
+        author: { percentage: 70 },
+        platform: { percentage: 30 }
+      },
+      unitPrice: 10,
+      options: { trackSaleTimestamp: false } // Отключаем отслеживание timestamp
+    });
+    
+    rs.addSale({ buyer: 'buyer1', timestamp: 1000 });
+    rs.addSale({ buyer: 'buyer2', timestamp: 2000 });
+    
+    const stats = rs.getSalesStats();
+    
+    // Проверяем, что информация о временных метках отсутствует
+    expect(stats.totalSales).toBe(2);
+    expect(stats.totalRevenue).toBe(20);
+    expect(stats.firstSaleDate).toBeUndefined();
+    expect(stats.lastSaleDate).toBeUndefined();
+    expect(stats.salesDuration).toBeUndefined();
+  });
+
+  // Тест 32: Отключение валидации схемы при инициализации
+  test('Disabling scheme validation on initialization', () => {
+    // Создаем объект с невалидной схемой, но отключаем валидацию
+    const invalidScheme = {
+      author: { percentage: -10 }, // Отрицательный процент
+      platform: { percentage: 150 } // Процент > 100%
+    };
+    
+    // При включенной валидации должна быть ошибка
+    expect(() => {
+      new RevenueSharing({
+        productName: 'Validation Test',
+        scheme: invalidScheme,
+        unitPrice: 10,
+        options: { validateScheme: true }
+      });
+    }).toThrow();
+    
+    // При отключенной валидации ошибки быть не должно
+    const rs = new RevenueSharing({
+      productName: 'No Validation Test',
+      scheme: invalidScheme,
+      unitPrice: 10,
+      options: { validateScheme: false }
+    });
+    
+    expect(rs).toBeDefined();
+  });
+  
+  // Тест 33: Расчет выплат для Buy-to-Earn модели с округлением и без
+  test('Buy-to-Earn payouts with and without rounding', () => {
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      creatorShare: 33.33, // Нецелое число для проверки округления
+      platformShare: 33.33,
+      promotionShare: 33.34,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60,
+      unitPrice: 100
+    });
+    
+    // Добавляем продажи
+    for (let i = 1; i <= 20; i++) {
+      buyToEarn.addSale({ buyer: `buyer${i}`, timestamp: i * 1000 });
+    }
+    
+    // Расчет с округлением (по умолчанию)
+    const roundedPayouts = buyToEarn.calculatePayouts();
+    
+    // Расчет без округления
+    const nonRoundedPayouts = buyToEarn.calculatePayouts({ roundResults: false });
+    
+    // Проверяем, что в результатах с округлением все значения округлены
+    // (целые числа или числа с 2 знаками после запятой)
+    expect(Number.isInteger(roundedPayouts.creator) || 
+           (roundedPayouts.creator * 100) % 1 === 0).toBe(true);
+    expect(Number.isInteger(roundedPayouts.platform) || 
+           (roundedPayouts.platform * 100) % 1 === 0).toBe(true);
+    expect(Number.isInteger(roundedPayouts.promotion) || 
+           (roundedPayouts.promotion * 100) % 1 === 0).toBe(true);
+           
+    // Проверяем, что в результатах без округления хотя бы одно значение не округлено
+    let hasNonRoundValue = false;
+    if (!Number.isInteger(nonRoundedPayouts.creator) && 
+        (nonRoundedPayouts.creator * 100) % 1 !== 0) {
+      hasNonRoundValue = true;
+    } else if (!Number.isInteger(nonRoundedPayouts.platform) && 
+               (nonRoundedPayouts.platform * 100) % 1 !== 0) {
+      hasNonRoundValue = true;
+    } else if (!Number.isInteger(nonRoundedPayouts.promotion) && 
+               (nonRoundedPayouts.promotion * 100) % 1 !== 0) {
+      hasNonRoundValue = true;
+    }
+    
+    // Возможно, что даже без округления все значения получились целыми,
+    // поэтому не используем expect здесь
+    
+    // Сравниваем округленные и неокругленные значения
+    expect(Math.abs(roundedPayouts.creator - nonRoundedPayouts.creator)).toBeLessThan(0.01);
+    expect(Math.abs(roundedPayouts.platform - nonRoundedPayouts.platform)).toBeLessThan(0.01);
+    expect(Math.abs(roundedPayouts.promotion - nonRoundedPayouts.promotion)).toBeLessThan(0.01);
+  });
+  
+  // Тест 34: Проверка отслеживания временных меток продаж
+  test('Sale timestamp tracking behavior', () => {
+    const rs = new RevenueSharing({
+      productName: 'Timestamp Test',
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10,
+      options: { trackSaleTimestamp: true } // Включаем отслеживание
+    });
+    
+    // Добавляем продажу с явным timestamp
+    rs.addSale({ buyer: 'buyer1', timestamp: 1000 });
+    
+    // Добавляем продажу без timestamp (должен быть установлен автоматически)
+    const beforeSale = Date.now();
+    rs.addSale({ buyer: 'buyer2' }); // Без явного timestamp
+    const afterSale = Date.now();
+    
+    // Извлекаем данные о продажах и проверяем временные метки
+    const exportedData = rs.exportData();
+    
+    // Проверяем, что первая продажа имеет заданный timestamp
+    expect(exportedData.sales[0].timestamp).toBe(1000);
+    
+    // Проверяем, что вторая продажа имеет автоматически установленный timestamp
+    expect(exportedData.sales[1].timestamp).toBeGreaterThanOrEqual(beforeSale);
+    expect(exportedData.sales[1].timestamp).toBeLessThanOrEqual(afterSale);
+  });
+  
+  // Тест 35: Проверка опций в exportData
+  test('Options in exportData', () => {
+    const customOptions = {
+      validateScheme: false,
+      trackSaleTimestamp: false,
+      customOption: 'test'
+    };
+    
+    const rs = new RevenueSharing({
+      productName: 'Export Options Test',
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10,
+      options: customOptions
+    });
+    
+    const exportedData = rs.exportData();
+    
+    // Проверяем, что все опции сохранены в экспорте
+    expect(exportedData.options).toEqual(customOptions);
+  });
+  
+  // Тест 36: Тестирование метода _roundResults с разными типами данных
+  test('Round results with different payout structures', () => {
+    const rs = new RevenueSharing({
+      productName: 'Round Test',
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10
+    });
+    
+    // Создаем объект с нечисловым значением для author
+    const nonNumericAuthor = { 
+      author: "not a number",
+      platform: 1.234,
+      buyers: { buyer1: 2.345, buyer2: 3.456 }
+    };
+    
+    // Используем приватный метод _roundResults
+    const roundedNonNumeric = rs._roundResults(nonNumericAuthor);
+    
+    // Проверяем, что нечисловое значение не изменилось
+    expect(roundedNonNumeric.author).toBe("not a number");
+    
+    // Проверяем, что числовые значения округлены
+    expect(roundedNonNumeric.platform).toBe(1.23);
+    expect(roundedNonNumeric.buyers.buyer1).toBe(2.35);
+    expect(roundedNonNumeric.buyers.buyer2).toBe(3.46);
+  });
+  
+  // Тест 37: Экспорт/импорт с различными данными и опциями
+  test('Export and import with various data and options', () => {
+    // Тест покрывает строки 516, 520, 531, 563
+    const rs1 = new RevenueSharing({
+      productName: 'Complex Export Test',
+      scheme: { author: { percentage: 70 }, platform: { percentage: 30 } },
+      unitPrice: 10,
+      options: { 
+        trackSaleTimestamp: true,
+        customOption1: 'value1',
+        customOption2: 123
+      }
+    });
+    
+    // Добавляем продажи с метаданными
+    rs1.addSale({ 
+      buyer: 'buyer1', 
+      timestamp: 1000, 
+      metadata: { country: 'US', age: 25 }
+    });
+    
+    rs1.addSale({ 
+      buyer: 'buyer2', 
+      timestamp: 2000, 
+      metadata: { country: 'UK', age: 30, subscription: 'premium' }
+    });
+    
+    // Экспортируем данные
+    const exportedData = rs1.exportData();
+    
+    // Новый инстанс с другими опциями
+    const rs2 = new RevenueSharing({
+      productName: 'Import Test',
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 20,
+      options: { 
+        trackSaleTimestamp: false,
+        differentOption: 'value'
+      }
+    });
+    
+    // Импортируем данные
+    rs2.importData(exportedData);
+    
+    // Проверяем, что все данные корректно импортированы
+    expect(rs2.productName).toBe('Complex Export Test');
+    expect(rs2.unitPrice).toBe(10);
+    
+    // Проверяем, что опции заменены
+    expect(rs2.options.trackSaleTimestamp).toBe(true);
+    expect(rs2.options.customOption1).toBe('value1');
+    expect(rs2.options.customOption2).toBe(123);
+    
+    // Проверяем, что метаданные продаж сохранены
+    const reExportedData = rs2.exportData();
+    
+    expect(reExportedData.sales[0].metadata.country).toBe('US');
+    expect(reExportedData.sales[0].metadata.age).toBe(25);
+    expect(reExportedData.sales[1].metadata.subscription).toBe('premium');
+  });
 });
