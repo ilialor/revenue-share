@@ -403,4 +403,285 @@ describe('RevenueSharing Core', () => {
     expect(payouts.creator).toBeGreaterThan(10000);
     expect(payouts.paybackGoal).toBe(150); // 1.5 * 100
   });
+
+  // --- Дополнительные тесты для увеличения покрытия кода ---
+
+  // Тест 17: Ошибка при инициализации Buy-to-Earn модели без initialInvestment
+  test('Error when initializing Buy-to-Earn model without initialInvestment', () => {
+    expect(() => {
+      new RevenueSharing({
+        productName: 'Invalid Buy-to-Earn',
+        unitPrice: 100,
+        useBuyToEarnModel: true
+        // Отсутствует initialInvestment
+      });
+    }).toThrow('Initial investment is required for Buy-to-Earn model');
+  });
+
+  // Тест 18: Ошибка при инициализации стандартной модели без схемы
+  test('Error when initializing standard model without scheme', () => {
+    expect(() => {
+      new RevenueSharing({
+        productName: 'Invalid Standard Model',
+        unitPrice: 100
+        // Отсутствует схема
+      });
+    }).toThrow('Scheme is required for standard revenue sharing model');
+  });
+
+  // Тест 19: Ошибка при добавлении продажи без указания покупателя
+  test('Error when adding sale without buyer', () => {
+    const rs = new RevenueSharing({
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10
+    });
+    
+    expect(() => {
+      rs.addSale({ /* отсутствует buyer */ });
+    }).toThrow('Buyer identifier is required for each sale');
+  });
+
+  // Тест 20: Ошибка при массовом добавлении продаж с неправильным форматом
+  test('Error when bulk adding sales with wrong format', () => {
+    const rs = new RevenueSharing({
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10
+    });
+    
+    expect(() => {
+      rs.addSales('not an array');
+    }).toThrow('Expected an array of sales');
+  });
+
+  // Тест 21: Ошибка при расчете предоплаченных токенов с неправильными параметрами
+  test('Calculating prepayers with invalid parameters', () => {
+    const buyToEarn1 = new RevenueSharing({
+      productName: 'Invalid Prepayers Test',
+      unitPrice: -5, // отрицательная цена
+      useBuyToEarnModel: true,
+      initialInvestment: 1000
+    });
+    
+    // Ожидаем 0, так как цена отрицательная
+    expect(buyToEarn1.calculateNumPrepayers()).toBe(0);
+    
+    const buyToEarn2 = new RevenueSharing({
+      productName: 'Invalid Prepayers Test 2',
+      unitPrice: 0, // нулевая цена
+      useBuyToEarnModel: true,
+      initialInvestment: 1000
+    });
+    
+    // Ожидаем 0, так как цена равна 0
+    expect(buyToEarn2.calculateNumPrepayers()).toBe(0);
+  });
+
+  // Тест 22: Расчет выплат без округления
+  test('Calculating payouts without rounding', () => {
+    const rs = new RevenueSharing({
+      scheme: {
+        author: { percentage: 33.33 },
+        platform: { percentage: 33.33 },
+        allBuyers: { percentage: 33.34 }
+      },
+      unitPrice: 3
+    });
+    
+    rs.addSale({ buyer: 'buyer1' });
+    
+    const payouts = rs.calculatePayouts({ roundResults: false });
+    
+    // Без округления должны получить точные значения с плавающей точкой
+    expect(payouts.author).toBeCloseTo(0.9999, 4);
+    expect(payouts.platform).toBeCloseTo(0.9999, 4);
+    expect(payouts.buyers.buyer1).toBeCloseTo(1.0002, 4);
+  });
+
+  // Тест 23: Расчет выплат Buy-to-Earn без округления
+  test('Calculating Buy-to-Earn payouts without rounding', () => {
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 100,
+      creatorShare: 33.33,
+      platformShare: 33.33,
+      promotionShare: 33.34,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60,
+      unitPrice: 100
+    });
+    
+    // Добавим продажи для 3 токенов (1 предоплаченный + 2 обычных)
+    for (let i = 1; i <= 3; i++) {
+      buyToEarn.addSale({ buyer: `buyer${i}`, timestamp: i * 1000 });
+    }
+    
+    const payouts = buyToEarn.calculatePayouts({
+      roundResults: false,
+      specificTokenNumber: 1
+    });
+    
+    // Проверяем, что значения не округлены
+    expect(Number.isInteger(payouts.creator)).toBe(false);
+    expect(Number.isInteger(payouts.platform)).toBe(false);
+    expect(Number.isInteger(payouts.promotion)).toBe(false);
+  });
+
+  // Тест 24: Ошибка при оценке точки окупаемости для стандартной модели
+  test('Error when estimating token payback for standard model', () => {
+    const rs = new RevenueSharing({
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10
+    });
+    
+    expect(() => {
+      rs.estimateTokenPayback(1);
+    }).toThrow('Token payback estimation is only available for Buy-to-Earn model');
+  });
+
+  // Тест 25: Получение статистики продаж для Buy-to-Earn модели
+  test('Getting sales statistics for Buy-to-Earn model', () => {
+    const buyToEarn = new RevenueSharing({
+      productName: 'Stats Buy-to-Earn Test',
+      unitPrice: 100,
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 70
+    });
+    
+    // Добавим продажи для 15 токенов
+    for (let i = 1; i <= 15; i++) {
+      buyToEarn.addSale({ buyer: `buyer${i}`, timestamp: i * 1000 });
+    }
+    
+    const stats = buyToEarn.getSalesStats();
+    
+    // Проверяем специфичные для Buy-to-Earn поля
+    expect(stats.initialInvestment).toBe(1000);
+    expect(stats.numPrepayers).toBe(10); // 1000 / 100 = 10
+    expect(stats.postPrepaymentSales).toBe(5); // 15 - 10 = 5
+    expect(stats.creatorShare).toBe(10);
+    expect(stats.platformShare).toBe(10);
+    expect(stats.promotionShare).toBe(10);
+    expect(stats.buyersShare).toBe(70);
+    expect(stats.paybackRatio).toBe(2);
+    expect(stats.paybackGoal).toBe(200); // 100 * 2 = 200
+    expect(stats.nonPaybackPoolSharePercent).toBe(70);
+    expect(stats.paybackPoolSharePercent).toBe(30); // 100 - 70 = 30
+  });
+
+  // Тест 26: Импорт невалидных данных с ошибкой валидации
+  test('Error when importing invalid data', () => {
+    const rs = new RevenueSharing({
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10
+    });
+    
+    // Невалидный формат данных
+    const invalidData = {
+      productName: 'Invalid Import',
+      // отсутствует unitPrice
+      sales: 'not an array' // не массив
+    };
+    
+    expect(() => {
+      rs.importData(invalidData);
+    }).toThrow('Invalid import data format');
+  });
+
+  // Тест 27: Импорт невалидных данных с невалидной схемой
+  test('Error when importing data with invalid scheme', () => {
+    const rs = new RevenueSharing({
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10
+    });
+    
+    // Данные с невалидной схемой
+    const dataWithInvalidScheme = {
+      productName: 'Invalid Scheme Import',
+      unitPrice: 20,
+      sales: [],
+      useBuyToEarnModel: false,
+      scheme: {
+        author: { percentage: -50 }, // отрицательный процент
+        platform: { percentage: 150 } // процент > 100
+      }
+    };
+    
+    expect(() => {
+      rs.importData(dataWithInvalidScheme);
+    }).toThrow('Invalid imported scheme');
+  });
+
+  // Тест 28: Импорт невалидных данных для Buy-to-Earn модели
+  test('Error when importing invalid Buy-to-Earn data', () => {
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      unitPrice: 100
+    });
+    
+    // Данные с невалидными параметрами Buy-to-Earn
+    const invalidBuyToEarnData = {
+      productName: 'Invalid Buy-to-Earn Import',
+      unitPrice: 20,
+      sales: [],
+      useBuyToEarnModel: true,
+      // отсутствует initialInvestment
+      creatorShare: 'not a number', // строка вместо числа
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    };
+    
+    expect(() => {
+      buyToEarn.importData(invalidBuyToEarnData);
+    }).toThrow('Invalid Buy-to-Earn parameters in imported data');
+  });
+
+  // Тест 29: Импорт данных без валидации
+  test('Importing data without validation', () => {
+    const rs = new RevenueSharing({
+      scheme: { author: { percentage: 100 } },
+      unitPrice: 10
+    });
+    
+    // Данные с некоторыми проблемами, но мы пропускаем валидацию
+    const potentiallyInvalidData = {
+      productName: 'Skip Validation Import',
+      unitPrice: 20,
+      sales: [],
+      scheme: {
+        author: { percentage: 50 },
+        platform: { percentage: 50 }
+      }
+    };
+    
+    // Должно пройти успешно, так как validate=false
+    expect(() => {
+      rs.importData(potentiallyInvalidData, false);
+    }).not.toThrow();
+    
+    // Проверяем, что данные импортированы
+    expect(rs.productName).toBe('Skip Validation Import');
+    expect(rs.unitPrice).toBe(20);
+  });
+
+  // Тест 30: Проверка validateScheme для Buy-to-Earn модели
+  test('ValidateScheme for Buy-to-Earn model', () => {
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      unitPrice: 100
+    });
+    
+    // Для Buy-to-Earn модели validateScheme всегда возвращает true
+    const result = buyToEarn.validateScheme();
+    expect(result.isValid).toBe(true);
+    expect(result.errors.length).toBe(0);
+  });
 });
