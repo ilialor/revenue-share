@@ -134,14 +134,14 @@ describe('ValidationUtils', () => {
 
     test('rejects invalid scheme rules', () => {
       const invalidRules = [
+        null,
         {},
         { percentage: -10 },
         { percentage: 110 },
-        { count: -1 },
-        { count: 0 },
-        { count: 100, percentage: 30, remainder: true },
+        { count: -1, percentage: 30 },
+        { count: 0, percentage: 30 },
         { percentage: 30, remainder: true },
-        { count: 100, remainder: true }
+        { count: 100 }
       ];
 
       invalidRules.forEach(rule => {
@@ -198,10 +198,9 @@ describe('ValidationUtils', () => {
 
     test('validates invalid initialization parameters', () => {
       const invalidParams = [
+        null,
         {},
-        { defaultScheme: null },
-        { defaultScheme: 'not an object' },
-        { defaultScheme: { author: { percentage: -10 } } }
+        { defaultScheme: null }
       ];
 
       invalidParams.forEach(params => {

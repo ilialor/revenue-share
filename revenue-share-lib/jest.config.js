@@ -60,15 +60,5 @@ module.exports = {
   // Setup для ES модулей
   transformIgnorePatterns: [
     '/node_modules/(?!.*\\.mjs$)'
-  ],
-  
-  // Используем тип модулей ESM
-  extensionsToTreatAsEsm: ['.js'],
-  
-  // Добавляем эти настройки для поддержки ESM в Jest
-  globals: {
-    'ts-jest': {
-      useESM: true,
-    },
-  }
+  ]
 };
