@@ -4,18 +4,15 @@
  * @version 1.0.0
  */
 
-// Import the RevenueSharing class
-// Note: In a real project, you'd import from the built files or use path aliases
-// For now, we'll use a relative path for testing
 import RevenueSharing from '../../../src/core/RevenueSharing';
 
 describe('RevenueSharing Core', () => {
-  // Тест 1: Простая схема (автор получает 100%)
+  // Test 1: Simple scheme (author receives 100%)
   test('Author receives 100% of revenue', () => {
     const scheme = { author: { percentage: 100 } };
     const lib = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
@@ -29,7 +26,7 @@ describe('RevenueSharing Core', () => {
     expect(Object.values(payouts.buyers).every(val => val === 0)).toBe(true);
   });
 
-  // Тест 2: Фиксированные проценты и остаток покупателям
+  // Test 2: Fixed percentages with remainder to all buyers
   test('Fixed percentages with remainder to all buyers', () => {
     const scheme = {
       author: { percentage: 10 },
@@ -38,8 +35,8 @@ describe('RevenueSharing Core', () => {
     };
     
     const lib = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
@@ -54,7 +51,7 @@ describe('RevenueSharing Core', () => {
     expect(Object.values(payouts.buyers).every(val => val === 80)).toBe(true);
   });
 
-  // Тест 3: Схема с группой ранних покупателей
+  // Test 3: Early buyers bonus
   test('Early buyers bonus', () => {
     const scheme = {
       author: { percentage: 10 },
@@ -64,8 +61,8 @@ describe('RevenueSharing Core', () => {
     };
     
     const lib = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
@@ -81,7 +78,7 @@ describe('RevenueSharing Core', () => {
     expect(payouts.buyers['buyer3']).toBeCloseTo(70, 2);
   });
 
-  // Тест 4: Схема "скользящего окна"
+  // Test 4: Sliding window scheme
   test('Sliding window scheme', () => {
     const scheme = {
       author: { percentage: 10 },
@@ -92,8 +89,8 @@ describe('RevenueSharing Core', () => {
     };
     
     const lib = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
@@ -105,21 +102,21 @@ describe('RevenueSharing Core', () => {
     
     expect(payouts.author).toBe(100);
     expect(payouts.platform).toBe(70);
-    expect(payouts.buyers['buyer0']).toBeCloseTo(25 + 8, 2); // первый
-    expect(payouts.buyers['buyer9']).toBeCloseTo(233.33 + 8, 2); // последний
-    expect(payouts.buyers['buyer4']).toBe(8); // средний
+    expect(payouts.buyers['buyer0']).toBeCloseTo(25 + 8, 2);
+    expect(payouts.buyers['buyer9']).toBeCloseTo(233.33 + 8, 2);
+    expect(payouts.buyers['buyer4']).toBe(8);
   });
 
-  // Тест 5: Нулевые продажи
+  // Test 5: Zero sales
   test('Zero sales', () => {
-    const scheme = { 
-      author: { percentage: 10 }, 
-      allBuyers: { remainder: true } 
+    const scheme = {
+      author: { percentage: 10 },
+      allBuyers: { remainder: true }
     };
     
     const lib = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
@@ -130,7 +127,7 @@ describe('RevenueSharing Core', () => {
     expect(Object.keys(payouts.buyers).length).toBe(0);
   });
 
-  // Тест 6: Валидация схемы
+  // Test 6: Scheme validation
   test('Scheme validation', () => {
     const scheme = {
       author: { percentage: 60 },
@@ -138,21 +135,19 @@ describe('RevenueSharing Core', () => {
     };
     
     expect(() => new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme,
       options: { validateScheme: true }
-    })).toThrow();
+    })).toThrow('Invalid scheme: Total percentage allocation (110%) must equal 100%');
   });
 
-  // Дополнительные тесты для покрытия всех методов API
-
-  // Тест 7: Массовое добавление продаж
+  // Test 7: Bulk adding sales
   test('Bulk adding sales', () => {
     const scheme = { author: { percentage: 100 } };
     const lib = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
@@ -168,18 +163,18 @@ describe('RevenueSharing Core', () => {
     expect(payouts.author).toBe(300);
   });
 
-  // Тест 8: Метод getSalesStats
+  // Test 8: Getting sales statistics
   test('Getting sales statistics', () => {
     const scheme = { author: { percentage: 100 } };
     const lib = new RevenueSharing({
-      productName: 'BestProduct', 
-      unitPrice: 50, 
+      productName: 'BestProduct',
+      unitPrice: 50,
       scheme: scheme
     });
     
     lib.addSale({ buyer: 'buyer1' });
     lib.addSale({ buyer: 'buyer2' });
-    lib.addSale({ buyer: 'buyer1' }); // Повторная покупка
+    lib.addSale({ buyer: 'buyer1' }); // Repeat purchase
     
     const stats = lib.getSalesStats();
     
@@ -190,12 +185,12 @@ describe('RevenueSharing Core', () => {
     expect(stats.uniqueBuyers).toBe(2);
   });
 
-  // Тест 9: Экспорт и импорт данных
+  // Test 9: Export and import data
   test('Export and import data', () => {
     const scheme = { author: { percentage: 100 } };
     const lib1 = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
@@ -205,8 +200,8 @@ describe('RevenueSharing Core', () => {
     const exportedData = lib1.exportData();
     
     const lib2 = new RevenueSharing({
-      productName: 'DummyName', 
-      unitPrice: 0, 
+      productName: 'DummyName',
+      unitPrice: 0,
       scheme: { platform: { percentage: 100 } }
     });
     
@@ -218,7 +213,7 @@ describe('RevenueSharing Core', () => {
     expect(lib2.unitPrice).toBe(100);
   });
 
-  // Тест 10: Опции округления
+  // Test 10: Rounding options in calculation
   test('Rounding options in calculation', () => {
     const scheme = {
       author: { percentage: 33.333 },
@@ -227,19 +222,82 @@ describe('RevenueSharing Core', () => {
     };
     
     const lib = new RevenueSharing({
-      productName: 'Product1', 
-      unitPrice: 100, 
+      productName: 'Product1',
+      unitPrice: 100,
       scheme: scheme
     });
     
     lib.addSale({ buyer: 'buyer1' });
     
-    // С округлением (по умолчанию)
+    // With rounding (default)
     const roundedPayouts = lib.calculatePayouts();
     expect(roundedPayouts.author).toBe(33.33);
     
-    // Без округления
+    // Without rounding
     const exactPayouts = lib.calculatePayouts({ roundResults: false });
     expect(exactPayouts.author).toBe(33.333);
+  });
+
+  // Test 11: Timestamp tracking
+  test('Timestamp tracking', () => {
+    const scheme = { author: { percentage: 100 } };
+    const lib = new RevenueSharing({
+      productName: 'Product1',
+      unitPrice: 100,
+      scheme: scheme,
+      options: { trackSaleTimestamp: true }
+    });
+    
+    const timestamp1 = Date.now();
+    lib.addSale({ buyer: 'buyer1', timestamp: timestamp1 });
+    
+    // Wait a bit to ensure different timestamps
+    setTimeout(() => {
+      const timestamp2 = Date.now();
+      lib.addSale({ buyer: 'buyer2', timestamp: timestamp2 });
+    }, 100);
+    
+    const stats = lib.getSalesStats();
+    expect(stats.firstSaleDate).toBeInstanceOf(Date);
+    expect(stats.lastSaleDate).toBeInstanceOf(Date);
+    expect(stats.salesDuration).toBeGreaterThan(0);
+  });
+
+  // Test 12: Invalid initialization parameters
+  test('Invalid initialization parameters', () => {
+    expect(() => new RevenueSharing({
+      productName: '',
+      unitPrice: 100,
+      scheme: { author: { percentage: 100 } }
+    })).toThrow('Invalid scheme: Product name cannot be empty');
+
+    expect(() => new RevenueSharing({
+      productName: 'Product1',
+      unitPrice: -100,
+      scheme: { author: { percentage: 100 } }
+    })).toThrow('Invalid scheme: Unit price must be a positive number');
+
+    expect(() => new RevenueSharing({
+      productName: 'Product1',
+      unitPrice: 100,
+      scheme: null
+    })).toThrow('Invalid scheme: Scheme must be a non-null object');
+  });
+
+  // Test 13: Invalid sale data
+  test('Invalid sale data', () => {
+    const scheme = { author: { percentage: 100 } };
+    const lib = new RevenueSharing({
+      productName: 'Product1',
+      unitPrice: 100,
+      scheme: scheme
+    });
+
+    expect(() => lib.addSale({})).toThrow('Buyer identifier is required for each sale');
+    expect(() => lib.addSale({ buyer: null })).toThrow('Buyer identifier is required for each sale');
+    expect(() => lib.addSale({ buyer: '' })).toThrow('Buyer identifier is required for each sale');
+
+    expect(() => lib.addSales(null)).toThrow('Expected an array of sales');
+    expect(() => lib.addSales('not an array')).toThrow('Expected an array of sales');
   });
 });

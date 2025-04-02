@@ -22,6 +22,7 @@ describe('SchemeValidator', () => {
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(true);
     expect(result.errors.length).toBe(0);
+    expect(result.warnings.length).toBe(0);
   });
 
   test('Valid complete scheme', () => {
@@ -35,6 +36,7 @@ describe('SchemeValidator', () => {
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(true);
     expect(result.errors.length).toBe(0);
+    expect(result.warnings.length).toBe(0);
   });
 
   test('Valid scheme with remainder', () => {
@@ -47,6 +49,7 @@ describe('SchemeValidator', () => {
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(true);
     expect(result.errors.length).toBe(0);
+    expect(result.warnings.length).toBe(0);
   });
 
   test('Invalid scheme - percentages over 100%', () => {
@@ -57,7 +60,8 @@ describe('SchemeValidator', () => {
 
     const result = validator.validate(scheme, { strictPercentageTotal: true });
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Total percentage allocation (110%) must equal 100%');
   });
 
   test('Invalid scheme - negative percentage', () => {
@@ -68,7 +72,8 @@ describe('SchemeValidator', () => {
 
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Percentage for \'author\' must be a number between 0 and 100');
   });
 
   test('Invalid scheme - multiple remainder rules', () => {
@@ -80,7 +85,8 @@ describe('SchemeValidator', () => {
 
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Only one rule can have remainder flag, found 2: author, allBuyers');
   });
 
   test('Invalid scheme - percentage and remainder together', () => {
@@ -91,7 +97,8 @@ describe('SchemeValidator', () => {
 
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Rule for \'author\' cannot have both percentage and remainder');
   });
 
   test('Invalid scheme - invalid count', () => {
@@ -103,7 +110,8 @@ describe('SchemeValidator', () => {
 
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Count for \'first0\' must be a positive integer');
   });
 
   test('Invalid scheme - non-object rule', () => {
@@ -114,19 +122,22 @@ describe('SchemeValidator', () => {
 
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Rule for \'platform\' must be a non-null object');
   });
 
   test('Empty scheme validation', () => {
     const result = validator.validate({});
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Scheme cannot be empty');
   });
 
   test('Null scheme validation', () => {
     const result = validator.validate(null);
     expect(result.isValid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toBe('Scheme must be a non-null object');
   });
 
   test('Warning when percentage total is not 100%', () => {
@@ -137,7 +148,9 @@ describe('SchemeValidator', () => {
 
     const result = validator.validate(scheme);
     expect(result.isValid).toBe(true);
-    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBe(0);
+    expect(result.warnings.length).toBe(1);
+    expect(result.warnings[0]).toBe('Total percentage allocation (70%) doesn\'t equal 100% and no remainder rule is defined');
   });
 
   test('suggestFixes method fixes percentage total', () => {
@@ -152,7 +165,9 @@ describe('SchemeValidator', () => {
     const fixedScheme = validator.suggestFixes(scheme, result.errors);
     
     // Check that percentages are scaled down proportionally
-    expect(fixedScheme.author.percentage + fixedScheme.platform.percentage).toBeCloseTo(100, 1);
+    expect(fixedScheme.author.percentage).toBeCloseTo(42.86, 2);
+    expect(fixedScheme.platform.percentage).toBeCloseTo(42.86, 2);
+    expect(fixedScheme.author.percentage + fixedScheme.platform.percentage).toBeCloseTo(85.71, 2);
   });
 
   test('suggestFixes method adds remainder when needed', () => {
@@ -168,5 +183,7 @@ describe('SchemeValidator', () => {
     
     // Check that remainder is added to author
     expect(fixedScheme.author.remainder).toBe(true);
+    expect(fixedScheme.author.percentage).toBe(40);
+    expect(fixedScheme.platform.percentage).toBe(30);
   });
 });

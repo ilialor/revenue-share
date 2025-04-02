@@ -52,8 +52,11 @@ module.exports = {
     }
   },
   
-  // Transform files with babel-jest
+  // Configure Babel for Jest
   transform: {
-    '^.+\\.js$': 'babel-jest'
-  }
+    '^.+\\.js$': ['babel-jest', { presets: ['@babel/preset-env'] }]
+  },
+  
+  // Don't ignore node_modules that need to be transformed
+  transformIgnorePatterns: ['node_modules/(?!(@babel)/)']
 };
