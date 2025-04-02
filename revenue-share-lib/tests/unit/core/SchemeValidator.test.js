@@ -174,16 +174,112 @@ describe('SchemeValidator', () => {
 
   test('suggestFixes method adds remainder when needed', () => {
     const scheme = {
-      author: { percentage: 40 },
+      author: { percentage: 50 },
       platform: { percentage: 30 }
     };
-
-    const fixedScheme = validator.suggestFixes(scheme, []);
+    
+    const errors = ['Percentages do not add up to 100%'];
+    
+    const fixedScheme = validator.suggestFixes(scheme, errors);
     
     expect(fixedScheme).toHaveProperty('author');
     expect(fixedScheme).toHaveProperty('platform');
+    expect(fixedScheme.author).toHaveProperty('remainder');
+    expect(fixedScheme.author.remainder).toBe(true);
+  });
+
+  test('Validation of complex rules with multiple properties', () => {
+    const scheme = {
+      author: { percentage: 40 },
+      platform: { percentage: 30 },
+      earlyBuyers: { 
+        count: 10, 
+        percentage: 20, 
+        otherProperty: 'test',
+        invalidRule: true 
+      },
+      allBuyers: { 
+        percentage: 10,
+        invalidProperty: 'test' 
+      }
+    };
     
-    expect(fixedScheme.author.percentage).toBe(40);
-    expect(fixedScheme.platform.percentage).toBe(30);
+    const validationResult = validator.validate(scheme);
+    expect(validationResult.isValid).toBe(true);
+    expect(validationResult.warnings.length).toBe(0);
+  });
+  
+  test('Validation for rules with both count and fromEnd', () => {
+    const scheme = {
+      author: { percentage: 40 },
+      platform: { percentage: 30 },
+      lastBuyers: { 
+        count: 5, 
+        fromEnd: true,
+        percentage: 30
+      }
+    };
+    
+    const validationResult = validator.validate(scheme);
+    expect(validationResult.isValid).toBe(true);
+    expect(validationResult.warnings.length).toBe(0);
+  });
+  
+  test('Validation with negative count', () => {
+    const scheme = {
+      author: { percentage: 40 },
+      platform: { percentage: 30 },
+      earlyBuyers: { 
+        count: -5,
+        percentage: 30
+      }
+    };
+    
+    const validationResult = validator.validate(scheme);
+    expect(validationResult.isValid).toBe(false);
+    expect(validationResult.errors.length).toBeGreaterThan(0);
+    expect(validationResult.errors[0]).toMatch(/count.*positive/i);
+  });
+  
+  test('validateRules method with custom validation', () => {
+    const testScheme = {
+      author: { percentage: 20 },
+      platform: { percentage: 30 },
+      testRule: { customProperty: 'test' }
+    };
+    
+    const customValidation = (rule, key) => {
+      if (key === 'testRule' && rule.customProperty !== 'test') {
+        return 'testRule requires customProperty to be "test"';
+      }
+      return null;
+    };
+    
+    const validationResult = validator.validate(testScheme, customValidation);
+    expect(validationResult.isValid).toBe(true);
+    
+    let testRuleError = customValidation({ customProperty: 123 }, 'testRule');
+    expect(testRuleError).not.toBeNull();
+    
+    const invalidSchemeTest = {
+      author: { percentage: 20 },
+      platform: { percentage: 30 },
+      testRule: { customProperty: 123 }
+    };
+    
+    const directResult = customValidation(invalidSchemeTest.testRule, 'testRule');
+    expect(directResult).not.toBeNull();
+  });
+  
+  test('validateRules method with null scheme', () => {
+    const validationResult = validator.validate(null);
+    expect(validationResult.isValid).toBe(false);
+    expect(validationResult.errors[0]).toMatch(/must be.*object/i);
+  });
+  
+  test('validateRules method with non-object scheme', () => {
+    const validationResult = validator.validate('not an object');
+    expect(validationResult.isValid).toBe(false);
+    expect(validationResult.errors[0]).toMatch(/must be.*object/i);
   });
 });

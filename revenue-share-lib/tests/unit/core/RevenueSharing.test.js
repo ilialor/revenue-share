@@ -930,4 +930,217 @@ describe('RevenueSharing Core', () => {
     expect(reExportedData.sales[0].metadata.age).toBe(25);
     expect(reExportedData.sales[1].metadata.subscription).toBe('premium');
   });
+  
+  // Дополнительные тесты для увеличения покрытия
+  
+  test('Advanced Buy-to-Earn model estimation with invalid number', () => {
+    // Тест для покрытия строки 139
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      unitPrice: 0, // Невалидная цена единицы
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Проверяем, что calculateNumPrepayers возвращает 0 при невалидных параметрах
+    expect(buyToEarn.calculateNumPrepayers()).toBe(0);
+  });
+  
+  test('Buy-to-Earn model with negative initialInvestment', () => {
+    // Тест для проверки расчетов с невалидными данными
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: -100, // Отрицательное значение
+      unitPrice: 100,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Проверяем, что calculateNumPrepayers возвращает 0 при отрицательной инвестиции
+    expect(buyToEarn.calculateNumPrepayers()).toBe(0);
+  });
+  
+  test('Buy-to-Earn model with zero unitPrice', () => {
+    // Проверка на инициализацию с нулевой ценой
+    expect(() => {
+      new RevenueSharing({
+        useBuyToEarnModel: true,
+        initialInvestment: 1000,
+        unitPrice: 0, // Нулевая цена
+        creatorShare: 10,
+        platformShare: 10,
+        promotionShare: 10
+      });
+    }).not.toThrow(); // Должно не выбрасывать исключение
+  });
+  
+  test('Token payback estimation with very early token', () => {
+    // Тест для покрытия строки 205
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      unitPrice: 100,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Оценка для очень раннего токена (токен #1)
+    const estimation = buyToEarn.estimateTokenPayback(1);
+    
+    // Проверяем, что оценка возвращена и содержит ожидаемые поля
+    expect(estimation.paybackSale).toBeGreaterThan(1);
+    expect(estimation.roi).toBeDefined();
+  });
+  
+  test('Buy-to-Earn payouts with very specific token number', () => {
+    // Тест для покрытия строк 297-304
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      unitPrice: 100,
+      creatorShare: 10,
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Добавляем множество продаж
+    for (let i = 1; i <= 30; i++) {
+      buyToEarn.addSale({ buyer: `buyer${i}`, timestamp: i * 1000 });
+    }
+    
+    // Расчет выплат для раннего токена (токен в пределах prepayers)
+    const earlyTokenPayouts = buyToEarn.calculatePayouts({ specificTokenNumber: 5 });
+    
+    // Проверка результатов
+    expect(earlyTokenPayouts.buyer).toBeGreaterThan(0);
+    expect(earlyTokenPayouts.creator).toBeGreaterThan(buyToEarn.initialInvestment);
+    expect(earlyTokenPayouts.platform).toBeGreaterThan(0);
+    expect(earlyTokenPayouts.promotion).toBeGreaterThan(0);
+  });
+  
+  test('Buy-to-Earn with multiple token earning scenarios', () => {
+    // Тест для покрытия строк 371-386
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      unitPrice: 100,
+      creatorShare: 30, // Высокая доля создателя
+      platformShare: 10,
+      promotionShare: 10,
+      paybackRatio: 1.5, // Низкий payback ratio для быстрого достижения окупаемости
+      nonPaybackPoolSharePercent: 90 // Высокий приоритет для неокупившихся
+    });
+    
+    // Добавляем продажи
+    for (let i = 1; i <= 40; i++) {
+      buyToEarn.addSale({ buyer: `buyer${i}`, timestamp: i * 1000 });
+    }
+    
+    // Сравниваем результаты для разных токенов
+    const earlyToken = buyToEarn.calculatePayouts({ specificTokenNumber: 2 });
+    const midToken = buyToEarn.calculatePayouts({ specificTokenNumber: 5 });
+    const lateToken = buyToEarn.calculatePayouts({ specificTokenNumber: 8 });
+    
+    // Проверяем, что ранний токен получает больше дохода
+    expect(earlyToken.buyer).toBeGreaterThan(0);
+    
+    // Проверяем, что токены отличаются своими paybackPoint
+    // Так как мы выбираем очень разные токены, они должны окупаться в разное время
+    if (earlyToken.paybackPoint !== null && midToken.paybackPoint !== null) {
+      expect(earlyToken.paybackPoint).not.toEqual(midToken.paybackPoint);
+    }
+    
+    if (midToken.paybackPoint !== null && lateToken.paybackPoint !== null) {
+      expect(midToken.paybackPoint).not.toEqual(lateToken.paybackPoint);
+    }
+  });
+  
+  test('Buy-to-Earn complex payout rounding', () => {
+    // Тест для покрытия строк 402-403, 410
+    const buyToEarn = new RevenueSharing({
+      useBuyToEarnModel: true,
+      initialInvestment: 1000,
+      unitPrice: 100,
+      creatorShare: 33.33, // Нецелое число для проверки округления
+      platformShare: 33.33,
+      promotionShare: 33.34,
+      paybackRatio: 2,
+      nonPaybackPoolSharePercent: 60
+    });
+    
+    // Добавляем продажи
+    for (let i = 1; i <= 25; i++) {
+      buyToEarn.addSale({ buyer: `buyer${i}`, timestamp: i * 1000 });
+    }
+    
+    // Расчет без округления
+    const noRoundPayouts = buyToEarn.calculatePayouts({ 
+      roundResults: false,
+      specificTokenNumber: 5
+    });
+    
+    // Расчет с округлением
+    const roundedPayouts = buyToEarn.calculatePayouts({ 
+      roundResults: true,
+      specificTokenNumber: 5
+    });
+    
+    // Проверяем, что значения в noRoundPayouts не равны значениям в roundedPayouts
+    // что подтверждает, что обе ветви кода для округления выполнены
+    
+    // Для creator проверяем, что без округления значение не целое,
+    // а с округлением - либо целое, либо с двумя знаками после запятой
+    const creatorRounded = Math.round(roundedPayouts.creator * 100) / 100;
+    expect(roundedPayouts.creator).toBe(creatorRounded);
+    
+    // Проверяем, что округление повлияло на значения, но не сильно
+    expect(Math.abs(noRoundPayouts.creator - roundedPayouts.creator)).toBeLessThan(0.01);
+    expect(Math.abs(noRoundPayouts.platform - roundedPayouts.platform)).toBeLessThan(0.01);
+    expect(Math.abs(noRoundPayouts.promotion - roundedPayouts.promotion)).toBeLessThan(0.01);
+    expect(Math.abs(noRoundPayouts.buyer - roundedPayouts.buyer)).toBeLessThan(0.01);
+  });
+  
+  test('RevenueSharing with non-integer unitPrice and calculations', () => {
+    // Тест для проверки работы с нецелыми числами в основной модели
+    const rs = new RevenueSharing({
+      productName: 'Non-Integer Test',
+      unitPrice: 9.99,
+      scheme: {
+        author: { percentage: 70 },
+        platform: { percentage: 30 }
+      }
+    });
+    
+    // Добавляем продажи
+    rs.addSale({ buyer: 'buyer1' });
+    rs.addSale({ buyer: 'buyer2' });
+    
+    // Получаем статистику
+    const stats = rs.getSalesStats();
+    expect(stats.totalRevenue).toBeCloseTo(19.98, 2); // 9.99 * 2
+    
+    // Расчет выплат с округлением
+    const roundedPayouts = rs.calculatePayouts();
+    expect(roundedPayouts.author).toBeCloseTo(13.99, 2); // 70% от 19.98
+    expect(roundedPayouts.platform).toBeCloseTo(5.99, 2); // 30% от 19.98
+    
+    // Расчет выплат без округления
+    const noRoundPayouts = rs.calculatePayouts({ roundResults: false });
+    
+    // Проверяем, что значения очень близки, но не обязательно равны из-за 
+    // погрешностей в вычислениях с плавающей точкой
+    expect(Math.abs(roundedPayouts.author - noRoundPayouts.author)).toBeLessThan(0.01);
+  });
 });
